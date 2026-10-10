@@ -93,9 +93,10 @@ h2 em{color:var(--acc)}
 #ind{min-width:11em;text-align:center}
 .hint{font-size:1rem;opacity:.65;text-align:center;margin:1rem 0 0}
 #stage:fullscreen{overflow:auto;display:flex;flex-direction:column;justify-content:center;border-radius:0}
+#stage.mobile-fullscreen{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;z-index:100;overflow:auto;display:flex;flex-direction:column;justify-content:flex-start;border-radius:0;padding:calc(12px + env(safe-area-inset-top,0px)) 12px calc(12px + env(safe-area-inset-bottom,0px))}
+body.mobile-reader-open{overflow:hidden}
 .author .wrap{max-width:760px;text-align:center}
 .author p{color:var(--mute)}
-.star{font-size:2rem;color:var(--acc);display:block;margin:1.4rem 0 .4rem}
 .cta{background:var(--g);color:#f4efe2;text-align:center}
 .cta h2{font-size:clamp(2.2rem,6vw,4.2rem);margin-bottom:1.6rem}
 footer{background:var(--g2);color:#d8d2bf;padding:2.4rem 0;text-align:center;font-size:1rem}
@@ -182,7 +183,6 @@ footer b{font:700 1.4rem var(--f1);color:#f4efe2;display:block}
 <div class="k" style="justify-content:center">03 عن المؤلف</div>
 <h2>م / محمد عماد</h2>
 <p>يقدّم هذا العمل تأملات وقصصًا عن الإنسان والعلاقات التي تشكّل عالمنا، في محاولة لفهم أنفسنا والآخرين على نحو أعمق.</p>
-<span class="star" aria-hidden="true">✳</span>
 <p>حكايات وتجارب، وأسئلة عن الإنسان ومن حوله.<br>مساحة للتأمل والفهم</p>
 </div></section>
 
@@ -201,6 +201,11 @@ const ar=n=>n.toLocaleString('ar-EG');
 const bk=$('#book'),bw=$('#bw'),lf=$('#leaf'),iL=$('#iL'),iR=$('#iR'),iF=$('#iF'),iB=$('#iB'),sF=$('#sF'),sB=$('#sB'),cL=$('#cL'),cR=$('#cR'),stg=$('#stage');
 let t=0,q=1,busy=false,sound=true,ac,bufs=[],keep=new Map();
 const one=()=>mq.matches;
+const PAGE_KEY='ma-baynana-ensan:last-book-page';
+const getSavedPage=()=>{try{const n=Number(localStorage.getItem(PAGE_KEY));return Number.isInteger(n)&&n>=1&&n<=N?n:1}catch(e){return 1}};
+const savedPage=getSavedPage();
+if(one())q=savedPage;else t=savedPage<2?0:savedPage>>1;
+function saveReaderPage(){try{localStorage.setItem(PAGE_KEY,String(one()?q:(t?2*t:1)))}catch(e){}}
 const toast=m=>{const e=$('#toast');e.textContent=m;e.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>e.classList.remove('on'),2600)};
 function set(im,i){const ok=i>=1&&i<=N;if(ok){im.src=P[i-1];im.alt='الصفحة '+ar(i)}else{im.removeAttribute('src');im.alt=''}im.parentNode.style.visibility=ok?'visible':'hidden'}
 function pre(a,b){const m=new Map();for(let i=Math.max(1,a);i<=Math.min(N,b);i++){const im=keep.get(i)||new Image();if(!im.src)im.src=P[i-1];m.set(i,im)}keep=m}
@@ -217,6 +222,7 @@ function stat(){
   const first=s?q<=1:t===0;
   $('#ind').textContent=first?'الغلاف':s?`الصفحة ${ar(q)} من ${ar(N)}`:`الصفحات ${ar(2*t)}–${ar(2*t+1)} من ${ar(N)}`;
   $('#prev').disabled=first;$('#next').disabled=s?q>=N:t>=T;
+  saveReaderPage();
 }
 const ease=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
 function paint(u,s,k){
@@ -302,7 +308,19 @@ stg.addEventListener('touchstart',e=>{tx=e.touches[0].clientX},{passive:true});
 stg.addEventListener('touchend',e=>{if(tx===null)return;const d=e.changedTouches[0].clientX-tx;tx=null;if(Math.abs(d)>50)flip(d>0?1:-1)});
 mq.addEventListener('change',()=>{if(busy)return;if(one()){q=t?2*t:1}else{t=q<2?0:q>>1}stat()});
 $('#snd').onclick=e=>{sound=!sound;e.currentTarget.textContent=sound?'صوت الورق يعمل':'صوت الورق متوقف';e.currentTarget.setAttribute('aria-pressed',sound)};
-$('#fs').onclick=()=>{try{document.fullscreenElement?document.exitFullscreen():stg.requestFullscreen().catch(()=>toast('ملء الشاشة غير متاح هنا'))}catch(e){toast('ملء الشاشة غير متاح هنا')}};
+const fsBtn=$('#fs');
+function setFullscreenLabel(active){fsBtn.textContent=active?'إنهاء ملء الشاشة':'ملء الشاشة';fsBtn.setAttribute('aria-pressed',String(active))}
+function setMobileFullscreen(active){stg.classList.toggle('mobile-fullscreen',active);document.body.classList.toggle('mobile-reader-open',active);setFullscreenLabel(active)}
+fsBtn.setAttribute('aria-pressed','false');
+fsBtn.onclick=async()=>{
+  if(stg.classList.contains('mobile-fullscreen')){setMobileFullscreen(false);return}
+  if(document.fullscreenElement){try{await document.exitFullscreen()}catch(e){toast('تعذر إنهاء ملء الشاشة')}return}
+  if(typeof stg.requestFullscreen==='function'){
+    try{await stg.requestFullscreen()}catch(e){if(mq.matches)setMobileFullscreen(true);else toast('ملء الشاشة غير متاح هنا')}
+  }else if(mq.matches)setMobileFullscreen(true);
+  else toast('ملء الشاشة غير متاح هنا');
+};
+ document.addEventListener('fullscreenchange',()=>setFullscreenLabel(document.fullscreenElement===stg));
 $('#share').onclick=async()=>{
   try{
     if(navigator.share){await navigator.share({title:document.title,url:location.href});return}
@@ -321,6 +339,13 @@ async function dl(){
 }
 document.querySelectorAll('.dl').forEach(b=>b.onclick=dl);
 stat();
+const SCROLL_KEY='ma-baynana-ensan:last-scroll-position';
+let restoringScroll=true,scrollSaveTimer;
+let savedScroll=null;
+try{const n=Number(localStorage.getItem(SCROLL_KEY));if(Number.isFinite(n)&&n>=0)savedScroll=n}catch(e){}
+addEventListener('scroll',()=>{if(restoringScroll)return;clearTimeout(scrollSaveTimer);scrollSaveTimer=setTimeout(()=>{try{localStorage.setItem(SCROLL_KEY,String(scrollY))}catch(e){}},180)},{passive:true});
+addEventListener('pagehide',()=>{saveReaderPage();if(!restoringScroll)try{localStorage.setItem(SCROLL_KEY,String(scrollY))}catch(e){}});
+if(savedScroll!==null&&savedScroll>0){requestAnimationFrame(()=>{scrollTo(0,savedScroll);setTimeout(()=>{restoringScroll=false},300)})}else restoringScroll=false;
 </script>
 </body>
 </html>
